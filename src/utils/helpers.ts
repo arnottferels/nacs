@@ -1,3 +1,5 @@
+import type { ScanItem } from "../components/types";
+
 export const isTouchDevice = () => {
   const ua = navigator.userAgent;
   const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
@@ -71,34 +73,34 @@ export const getAndSetCameraIdWithFlash = async () => {
   return cameraId;
 };
 
-export const getMediaConstraints = async (facingMode) => {
-  // const baseSettings = isTouchDevice()
-  //   ? { height: { ideal: 1080 }, width: { ideal: 1920 } }
-  //   : { height: { ideal: 720 }, width: { ideal: 1280 } };
-  const customConstraints = {
+export const getMediaConstraints = async (facingMode: "user" | "environment") => {
+  const aspect = window.innerWidth / window.innerHeight;
+
+  const customConstraints: MediaStreamConstraints = {
     audio: false,
     video: {
-      // ...baseSettings,
-      aspectRatio: undefined,
-      facingMode: facingMode,
+      aspectRatio: aspect,
+      facingMode,
       resizeMode: false,
       focusMode: "continuous",
       focusDistance: 0,
       exposureMode: "continuous",
-      zoom: facingMode === "user" ? 1 : 1,
+      zoom: 1,
       frameRate: { ideal: 15, max: 30 },
     } as MediaTrackConstraints,
   };
+
   if (facingMode === "environment" && isTouchDevice()) {
     const cameraId = await getAndSetCameraIdWithFlash();
     if (cameraId) {
-      customConstraints.video.deviceId = cameraId;
+      (customConstraints.video as MediaTrackConstraints).deviceId = cameraId;
     }
   }
+
   return customConstraints;
 };
 
-export const stopAllTracks = (stream) => {
+export const stopAllTracks = (stream: MediaStream | null) => {
   if (stream) {
     const tracks = stream.getTracks();
     for (const track of tracks) {
@@ -107,7 +109,7 @@ export const stopAllTracks = (stream) => {
   }
 };
 
-export const playScanBeep = (index) => {
+export const playScanBeep = (index: number) => {
   const notes = [
     261.63, // Do (C4)
     293.66, // Re (D4)
@@ -119,20 +121,18 @@ export const playScanBeep = (index) => {
     523.25, // Do (C5)
   ].map((n) => n * 4); // transpose 2 octaves up
 
-  const step = index % notes.length;
-  const freq = notes[step];
+  const freq = notes[index % notes.length];
 
   const AudioCtx =
     typeof window.AudioContext !== "undefined"
       ? window.AudioContext
       : (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-
   const ctx = new AudioCtx();
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
 
-  osc.type = "square"; // Natural smooth tone
+  osc.type = "square";
   osc.frequency.value = freq;
 
   osc.connect(gain);
@@ -141,4 +141,24 @@ export const playScanBeep = (index) => {
   osc.start();
   osc.stop(ctx.currentTime + 0.2);
   osc.onended = () => ctx.close();
+};
+
+const key = "x_scanned_items";
+
+export const saveItemsToStorage = (items: ScanItem[]) => {
+  localStorage.setItem(key, JSON.stringify(items));
+};
+
+export const loadItemsFromStorage = (): ScanItem[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export const clearItemsFromStorage = () => {
+  localStorage.removeItem(key);
 };
